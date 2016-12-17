@@ -8,32 +8,23 @@ fileName = 'uos-imaging/data_mannequin_face';
 load(fileName);
 
 %%
-% Histogram bin settings
+% Camera parameters
 h_start = 2000;
 h_end = 6000;
 h_length = 5;
 hbins = h_start:h_length:h_end;
 m = length(hbins);
+concurrent = false; % Use parallel pool to process data
 
 % Get image params
 [rows, cols] = size(arrivalTimes);
 
-% Bin data
-% bindata = [];
-% for i=1:rows
-%     for j=1:cols
-%         data = arrivalTimes{i,j};
-%         data(data<h_start) = [];
-%         data(data>h_end) = [];
-%         bindata = [bindata; data];
-%     end
-% end
 
 
 rms_pulsewidth = 45;
 rms_pulselength_cm = rms_pulsewidth*(8e-12)*(3e8)*100;
 sigs = rms_pulsewidth/h_length;
-f = @(x) exp(-abs(x).^2/(2*sigs^2)); % peak is 1
+f = @(x) exp(-abs(x).^2/(2*sigs^2)); 
 % Generate dictionary
 S = zeros(m,m);
 t = 1:1:m;
@@ -53,15 +44,26 @@ APar = parallel.pool.Constant(A);
 %%
 depth = zeros(rows, cols);
 tic
-for i=1:10
-    parfor j=1:cols
-        data = arrivalTimes{i, j};
-        [y, inds] = hist(data(1:15), hbins);
-        sol = opt_uos(y, APar.Value, delta);
-        depth(i, j) = hbins(find(sol(1:m)));
+if concurrent == false
+    for i=1:rows
+        for j=1:cols
+            data = arrivalTimes{i, j};
+            [y, inds] = hist(data(1:15), hbins);
+            sol = opt_uos(y, APar.Value, delta);
+            depth(i, j) = hbins(find(sol(1:m)));
+        end
+    end
+else
+    for i=1:rows
+        parfor j=1:cols
+            data = arrivalTimes{i, j};
+            [y, inds] = hist(data(1:15), hbins);
+            sol = opt_uos(y, APar.Value, delta);
+            depth(i, j) = hbins(find(sol(1:m)));
+        end
     end
 end
-val = toc
+runningTime = toc
 %%
 load([fileName '_truth']);
 depth_true = cell2mat(D_true);

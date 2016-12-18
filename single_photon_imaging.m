@@ -20,9 +20,12 @@ concurrent = false; % Use parallel pool to process data
 [rows, cols] = size(arrivalTimes);
 
 
-
+%
+% Signal generation - taken
+% from sample implementation
+% for output signal params
+%
 rms_pulsewidth = 45;
-rms_pulselength_cm = rms_pulsewidth*(8e-12)*(3e8)*100;
 sigs = rms_pulsewidth/h_length;
 f = @(x) exp(-abs(x).^2/(2*sigs^2)); 
 % Generate dictionary
@@ -35,35 +38,40 @@ for i=1:m
 end
 
 A = [S, ones(m, 1)];
-delta = 1e-4;
-max_iter = 10;
+delta = 1e-3;
 
-%% Initialize parallel pool & variables
-APar = parallel.pool.Constant(A);
-
+% Initialize parallel pool & variables
+if concurrent == true
+    APar = parallel.pool.Constant(A);
+    hbinsPar = parallel.pool.Constant(hbins);
+end
 %%
 depth = zeros(rows, cols);
-tic
+rtstart = tic;
+functime = 0;
 if concurrent == false
-    for i=1:rows
+    for i=1:1
         for j=1:cols
             data = arrivalTimes{i, j};
-            [y, inds] = hist(data(1:15), hbins);
-            sol = opt_uos(y, APar.Value, delta);
+            [y, ~] = hist(data(1:15), hbins);
+            fstart = tic;
+            [sol, t] = opt_uos(y, A, delta);
+            functime = functime + t;
             depth(i, j) = hbins(find(sol(1:m)));
         end
     end
 else
-    for i=1:rows
+    for i=1:10
         parfor j=1:cols
             data = arrivalTimes{i, j};
-            [y, inds] = hist(data(1:15), hbins);
-            sol = opt_uos(y, APar.Value, delta);
-            depth(i, j) = hbins(find(sol(1:m)));
+            [y, ~] = hist(data(1:15), hbins);
+            sol = find(opt_uos(y, APar.Value, delta));
+            depth(i, j) = hbins(sol(1));
         end
     end
 end
-runningTime = toc
+runningTime = toc(rtstart)
+
 %%
 load([fileName '_truth']);
 depth_true = cell2mat(D_true);
